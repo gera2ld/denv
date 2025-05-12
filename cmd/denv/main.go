@@ -9,12 +9,14 @@ import (
 	"os"
 )
 
+var version string
+
 func main() {
 	globalConfig := config.NewConfig()
 	filehandler := filehandler.NewFileHandler(globalConfig.RootDir, globalConfig.Debug)
 	userConfig := config.NewUserConfig(globalConfig, filehandler)
 	envManager := env.NewDynamicEnv(globalConfig, userConfig, filehandler)
-	rootCmd := cli.NewRootCommand(envManager)
+	rootCmd := cli.NewRootCommand(version, envManager)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)

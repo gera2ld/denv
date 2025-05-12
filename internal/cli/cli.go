@@ -11,10 +11,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRootCommand(envManager *env.DynamicEnv) *cobra.Command {
+func NewRootCommand(version string, envManager *env.DynamicEnv) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "denv",
-		Short: "DEnv CLI",
+		Use:     "denv",
+		Short:   "DEnv CLI",
+		Version: version,
 	}
 
 	cmd.AddCommand(newRunCommand(envManager))

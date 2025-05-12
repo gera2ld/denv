@@ -31,7 +31,7 @@ var args = [][]string{
 }
 
 func getCommit() string {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	cmd := exec.Command("git", "describe", "--always", "--tags")
 	output, err := cmd.Output()
 	if err != nil {
 		log.Fatalf("Error getting commit: %s\n", err)
@@ -73,7 +73,7 @@ func build() BuildResult {
 			"go",
 			"build",
 			"-ldflags",
-			"-s -w -X main.commit="+commit+" -X main.builtAt="+now,
+			"-s -w -X main.version="+commit+" -X main.builtAt="+now,
 			"-trimpath",
 			"-o",
 			"bin/"+name,
