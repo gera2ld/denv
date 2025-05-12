@@ -19,7 +19,7 @@ func NewRootCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 
 	cmd.AddCommand(newRunCommand(envManager))
 	cmd.AddCommand(newDeleteCommand(envManager))
-	// cmd.AddCommand(newImportCommand())
+	cmd.AddCommand(newImportCommand(envManager))
 	cmd.AddCommand(newExportCommand(envManager))
 	cmd.AddCommand(newKeysCommand(envManager))
 	cmd.AddCommand(newRenameCommand(envManager))
@@ -94,18 +94,24 @@ func newDeleteCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command 
 	}
 }
 
-// func newImportCommand() *cobra.Command {
-// 	return &cobra.Command{
-// 		Use:   "import <source>",
-// 		Short: "Import data from a directory",
-// 		Args:  cobra.ExactArgs(1),
-// 		RunE: func(cmd *cobra.Command, args []string) error {
-// 			source := args[0]
-// 			// Implementation for importing data
-// 			return nil
-// 		},
-// 	}
-// }
+func newImportCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+	return &cobra.Command{
+		Use:   "import <source>",
+		Short: "Import data from a directory",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			source := args[0]
+
+			keys, err := envManager.ImportTree(source, "")
+			if err != nil {
+				return fmt.Errorf("failed to import data from %s: %w", source, err)
+			}
+
+			fmt.Printf("Successfully imported %d keys from %s\n", len(keys), source)
+			return nil
+		},
+	}
+}
 
 func newExportCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	var outDir string
@@ -189,14 +195,15 @@ func newEditCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 				return errors.New("$EDITOR is not set")
 			}
 
-			parsed, err := envManager.GetEnv(key)
-			if err != nil {
-				return fmt.Errorf("failed to retrieve key: %w", err)
-			}
+			parsed, _ := envManager.GetEnv(key)
 
-			oldValue, err := envManager.FormatValue(parsed, false)
-			if err != nil {
-				return fmt.Errorf("failed to format value: %w", err)
+			oldValue := ""
+			if parsed != nil {
+				value, err := envManager.FormatValue(parsed, false)
+				if err != nil {
+					return fmt.Errorf("failed to format value: %w", err)
+				}
+				oldValue = value
 			}
 
 			safeKey := sanitizeKeyForFilename(key)
@@ -235,7 +242,6 @@ func newEditCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to parse new value: %w", err)
 			}
-			parsed.Metadata.ID = key
 
 			if err := envManager.SetEnv(key, parsed); err != nil {
 				return fmt.Errorf("failed to save updated value: %w", err)

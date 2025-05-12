@@ -1,9 +1,11 @@
 package filehandler
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type FileHandler struct {
@@ -51,4 +53,30 @@ func (d *FileHandler) DeleteFile(path string) error {
 		return nil
 	}
 	return os.Remove(filePath)
+}
+
+func (d *FileHandler) ListFiles(prefix string, baseDir string) ([]string, error) {
+	baseDir = filepath.Join(d.RootDir, baseDir)
+
+	var files []string
+	err := filepath.Walk(filepath.Join(d.RootDir, prefix), func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+
+		path, err = filepath.Rel(baseDir, path)
+		if err != nil || strings.HasPrefix(path, "..") {
+			return fmt.Errorf("failed to get relative path: %w", err)
+		}
+
+		files = append(files, path)
+		return nil
+	})
+	if err != nil && d.Debug {
+		log.Printf("Error listing files: %s\n", err)
+	}
+	return files, err
 }

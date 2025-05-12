@@ -190,24 +190,15 @@ func (d *DynamicEnvManager) LoadValue(encrypted string) (*DynamicEnvValue, error
 }
 
 func (d *DynamicEnvManager) ListEnvFiles(prefix string) ([]string, error) {
-	dir := filepath.Join(d.Config.RootDir, d.Config.DataDir, prefix)
-	files, err := os.ReadDir(dir)
+	files, err := d.Filehandler.ListFiles(filepath.Join(d.Config.DataDir, prefix), d.Config.DataDir)
 	if err != nil {
 		return nil, err
 	}
 
-	var result []string
+	result := make([]string, len(files))
 	for _, file := range files {
-		if file.IsDir() {
-			childFiles, err := d.ListEnvFiles(filepath.Join(prefix, file.Name()))
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, childFiles...)
-		} else {
-			relpath := strings.ReplaceAll(filepath.Join(prefix, file.Name()), "\\", "/")
-			result = append(result, relpath)
-		}
+		file = strings.ReplaceAll(file, "\\", "/")
+		result = append(result, file)
 	}
 	return result, nil
 }
@@ -226,18 +217,17 @@ func (d *DynamicEnvManager) ListItems(prefix string) map[string]*DynamicEnvValue
 		if !strings.HasSuffix(file, d.Config.EnvSuffix) {
 			continue
 		}
-		path := filepath.Join(d.Config.DataDir, file)
-		value, err := d.Filehandler.ReadFile(path)
+		value, err := d.Filehandler.ReadFile(filepath.Join(d.Config.DataDir, file))
 		if err != nil {
 			if d.Config.Debug {
-				log.Printf("Error reading file %s: %v\n", path, err)
+				log.Printf("Error reading file %s: %v\n", file, err)
 			}
 			continue
 		}
 		dynamicEnvValue, err := d.LoadValue(value)
 		if err != nil {
 			if d.Config.Debug {
-				log.Printf("Error parsing file %s: %v\n", path, err)
+				log.Printf("Error parsing file %s: %v\n", file, err)
 			}
 			continue
 		}
@@ -251,7 +241,7 @@ func (d *DynamicEnvManager) LoadIndex() *map[string]string {
 	if d.index != nil {
 		return d.index
 	}
-	var index map[string]string
+	index := make(map[string]string)
 	d.index = &index
 	data, err := d.Filehandler.ReadFile(d.Config.IndexFile)
 	if err != nil {
@@ -329,20 +319,30 @@ func (d *DynamicEnvManager) SetEnv(key string, value *DynamicEnvValue) error {
 	if value == nil {
 		return errors.New("value is nil")
 	}
+
 	uid, err := d.GetEnvUID(key)
 	if err != nil {
 		return err
 	}
+
 	keyFrom := value.Metadata.ID
 	value.Metadata.ID = key
+
 	data, err := d.FormatValue(value, true)
 	if err != nil {
 		return err
 	}
-	path := d.GetEnvPath(uid)
-	if err := d.Filehandler.WriteFile(path, data); err != nil {
+
+	encrypted, err := d.EncryptData(data)
+	if err != nil {
 		return err
 	}
+
+	path := d.GetEnvPath(uid)
+	if err := d.Filehandler.WriteFile(path, encrypted); err != nil {
+		return err
+	}
+
 	return d.UpdateIndex(uid, key, keyFrom)
 }
 
@@ -497,6 +497,34 @@ func (d *DynamicEnvManager) ExportTree(outDir string, prefix string) ([]string, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to write file: %w", err)
 		}
+	}
+	return keys, nil
+}
+
+func (d *DynamicEnvManager) ImportTree(inDir string, prefix string) ([]string, error) {
+	fs := filehandler.NewFileHandler(inDir, d.Config.Debug)
+	files, err := fs.ListFiles("", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list files: %w", err)
+	}
+	fmt.Println("Loaded", len(files), "files")
+	keys := make([]string, len(files))
+	for _, file := range files {
+		value, err := fs.ReadFile(file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file: %w", err)
+		}
+
+		dynamicEnvValue, err := d.ParseRawValue(value, false)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse file: %w", err)
+		}
+
+		err = d.SetEnv(file, dynamicEnvValue)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set env: %w", err)
+		}
+		keys = append(keys, file)
 	}
 	return keys, nil
 }
