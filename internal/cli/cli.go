@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"denv/internal/env_manager"
+	"denv/internal/env"
 	"errors"
 	"fmt"
 	"os"
@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRootCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func NewRootCommand(envManager *env.DynamicEnv) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "denv",
 		Short: "DEnv CLI",
@@ -34,7 +34,7 @@ func NewRootCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	return cmd
 }
 
-func newRunCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newRunCommand(envManager *env.DynamicEnv) *cobra.Command {
 	var envKeys []string
 	var export bool
 
@@ -81,7 +81,7 @@ You can also export the environment variables to stdout using the --export flag.
 	return cmd
 }
 
-func newDeleteCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newDeleteCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "delete <key>",
 		Short: "Delete a key",
@@ -94,7 +94,7 @@ func newDeleteCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command 
 	}
 }
 
-func newImportCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newImportCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "import <source>",
 		Short: "Import data from a directory",
@@ -113,7 +113,7 @@ func newImportCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command 
 	}
 }
 
-func newExportCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newExportCommand(envManager *env.DynamicEnv) *cobra.Command {
 	var outDir string
 	var prefix string
 
@@ -143,7 +143,7 @@ func newExportCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command 
 	return cmd
 }
 
-func newKeysCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newKeysCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "keys",
 		Short: "List all keys",
@@ -160,7 +160,7 @@ func newKeysCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	}
 }
 
-func newRenameCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newRenameCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rename <key> <newName>",
 		Short: "Rename a key",
@@ -182,7 +182,7 @@ func sanitizeKeyForFilename(key string) string {
 	return re.ReplaceAllString(key, "_")
 }
 
-func newEditCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newEditCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "edit <key>",
 		Short: "Edit the value of a key with $EDITOR",
@@ -253,7 +253,7 @@ func newEditCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	}
 }
 
-func newRecipientsCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newRecipientsCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "recipients",
 		Short: "List all recipients",
@@ -267,7 +267,7 @@ func newRecipientsCommand(envManager *env_manager.DynamicEnvManager) *cobra.Comm
 	}
 }
 
-func newRecipientAddCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newRecipientAddCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "recipientAdd <recipient>",
 		Short: "Add a recipient",
@@ -279,7 +279,7 @@ func newRecipientAddCommand(envManager *env_manager.DynamicEnvManager) *cobra.Co
 	}
 }
 
-func newRecipientDelCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newRecipientDelCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "recipientDel <recipient>",
 		Short: "Remove a recipient",
@@ -291,7 +291,7 @@ func newRecipientDelCommand(envManager *env_manager.DynamicEnvManager) *cobra.Co
 	}
 }
 
-func newReindexCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newReindexCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "reindex",
 		Short: "Rebuild index for all data",
@@ -301,7 +301,7 @@ func newReindexCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command
 	}
 }
 
-func newReencryptAllCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newReencryptAllCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "reencryptAll",
 		Short: "Reencrypt all data",
@@ -311,7 +311,7 @@ func newReencryptAllCommand(envManager *env_manager.DynamicEnvManager) *cobra.Co
 	}
 }
 
-func newCatCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+func newCatCommand(envManager *env.DynamicEnv) *cobra.Command {
 	return &cobra.Command{
 		Use:   "cat <key>",
 		Short: "Show the value of a key",

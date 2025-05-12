@@ -1,4 +1,4 @@
-package env_manager
+package env
 
 import (
 	"errors"
@@ -39,7 +39,7 @@ type DynamicEnvValue struct {
 	Payload  string
 }
 
-type DynamicEnvManager struct {
+type DynamicEnv struct {
 	Config      *config.ConfigType
 	UserConfig  *config.UserConfigType
 	Filehandler *filehandler.FileHandler
@@ -51,18 +51,18 @@ type DynamicEnvParsed struct {
 	Env   map[string]string
 }
 
-func NewDynamicEnvManager(config *config.ConfigType, userConfig *config.UserConfigType, filehandler *filehandler.FileHandler) *DynamicEnvManager {
-	return &DynamicEnvManager{Config: config, UserConfig: userConfig, Filehandler: filehandler}
+func NewDynamicEnv(config *config.ConfigType, userConfig *config.UserConfigType, filehandler *filehandler.FileHandler) *DynamicEnv {
+	return &DynamicEnv{Config: config, UserConfig: userConfig, Filehandler: filehandler}
 }
 
-func (d *DynamicEnvManager) GetFilePath(path string) string {
+func (d *DynamicEnv) GetFilePath(path string) string {
 	if strings.HasPrefix(path, d.Config.DataDir+"/") {
 		return path + d.Config.EnvSuffix
 	}
 	return path
 }
 
-func (d *DynamicEnvManager) ParseRawValue(value string, includeMetadata bool) (*DynamicEnvValue, error) {
+func (d *DynamicEnv) ParseRawValue(value string, includeMetadata bool) (*DynamicEnvValue, error) {
 	lines := strings.Split(value, "\n")
 	var metadata DynamicEnvMetadata
 
@@ -119,7 +119,7 @@ func indexOf(lines []string, target string, offset int) int {
 	return -1
 }
 
-func (d *DynamicEnvManager) FormatValue(value *DynamicEnvValue, includeMetadata bool) (string, error) {
+func (d *DynamicEnv) FormatValue(value *DynamicEnvValue, includeMetadata bool) (string, error) {
 	if value == nil {
 		return "", errors.New("value is nil")
 	}
@@ -141,7 +141,7 @@ func (d *DynamicEnvManager) FormatValue(value *DynamicEnvValue, includeMetadata 
 	return output, nil
 }
 
-func (d *DynamicEnvManager) EncryptData(data string) (string, error) {
+func (d *DynamicEnv) EncryptData(data string) (string, error) {
 	if len(d.UserConfig.Data.Recipients) == 0 {
 		return "", errors.New("no recipient is added")
 	}
@@ -162,7 +162,7 @@ func (d *DynamicEnvManager) EncryptData(data string) (string, error) {
 	return string(output), nil
 }
 
-func (d *DynamicEnvManager) DecryptData(data string) (string, error) {
+func (d *DynamicEnv) DecryptData(data string) (string, error) {
 	if d.Config.Identities == "" {
 		return "", errors.New("no identities file provided")
 	}
@@ -180,7 +180,7 @@ func (d *DynamicEnvManager) DecryptData(data string) (string, error) {
 	return string(output), nil
 }
 
-func (d *DynamicEnvManager) LoadValue(encrypted string) (*DynamicEnvValue, error) {
+func (d *DynamicEnv) LoadValue(encrypted string) (*DynamicEnvValue, error) {
 	value, err := d.DecryptData(encrypted)
 	if err != nil {
 		return nil, errors.New("failed to decrypt data: " + err.Error())
@@ -189,7 +189,7 @@ func (d *DynamicEnvManager) LoadValue(encrypted string) (*DynamicEnvValue, error
 	return dynamicEnvValue, err
 }
 
-func (d *DynamicEnvManager) ListEnvFiles(prefix string) ([]string, error) {
+func (d *DynamicEnv) ListEnvFiles(prefix string) ([]string, error) {
 	files, err := d.Filehandler.ListFiles(filepath.Join(d.Config.DataDir, prefix), d.Config.DataDir)
 	if err != nil {
 		return nil, err
@@ -203,7 +203,7 @@ func (d *DynamicEnvManager) ListEnvFiles(prefix string) ([]string, error) {
 	return result, nil
 }
 
-func (d *DynamicEnvManager) ListItems(prefix string) map[string]*DynamicEnvValue {
+func (d *DynamicEnv) ListItems(prefix string) map[string]*DynamicEnvValue {
 	envs := make(map[string]*DynamicEnvValue)
 	files, err := d.ListEnvFiles(prefix)
 	if err != nil {
@@ -237,7 +237,7 @@ func (d *DynamicEnvManager) ListItems(prefix string) map[string]*DynamicEnvValue
 	return envs
 }
 
-func (d *DynamicEnvManager) LoadIndex() *map[string]string {
+func (d *DynamicEnv) LoadIndex() *map[string]string {
 	if d.index != nil {
 		return d.index
 	}
@@ -253,7 +253,7 @@ func (d *DynamicEnvManager) LoadIndex() *map[string]string {
 	return d.index
 }
 
-func (d *DynamicEnvManager) SaveIndex(index *map[string]string) error {
+func (d *DynamicEnv) SaveIndex(index *map[string]string) error {
 	indexContent, err := yaml.Marshal(index)
 	if err != nil {
 		return err
@@ -262,7 +262,7 @@ func (d *DynamicEnvManager) SaveIndex(index *map[string]string) error {
 	return d.Filehandler.WriteFile(d.Config.IndexFile, string(indexContent))
 }
 
-func (d *DynamicEnvManager) BuildIndex() error {
+func (d *DynamicEnv) BuildIndex() error {
 	envs := d.ListItems("")
 	index := make(map[string]string)
 	for uid, value := range envs {
@@ -271,13 +271,13 @@ func (d *DynamicEnvManager) BuildIndex() error {
 	return d.SaveIndex(&index)
 }
 
-func (d *DynamicEnvManager) UpdateIndex(uid string, id string, idFrom string) error {
+func (d *DynamicEnv) UpdateIndex(uid string, id string, idFrom string) error {
 	index := d.LoadIndex()
 	(*index)[uid] = id
 	return d.SaveIndex(d.index)
 }
 
-func (d *DynamicEnvManager) GetEnvUID(key string) (string, error) {
+func (d *DynamicEnv) GetEnvUID(key string) (string, error) {
 	index := d.LoadIndex()
 	uid := ""
 	for iUid, iId := range *index {
@@ -296,12 +296,12 @@ func (d *DynamicEnvManager) GetEnvUID(key string) (string, error) {
 	return uid, nil
 }
 
-func (d *DynamicEnvManager) GetEnvPath(uid string) string {
+func (d *DynamicEnv) GetEnvPath(uid string) string {
 	path := filepath.Join(d.Config.DataDir, uid+d.Config.EnvSuffix)
 	return path
 }
 
-func (d *DynamicEnvManager) GetEnv(key string) (*DynamicEnvValue, error) {
+func (d *DynamicEnv) GetEnv(key string) (*DynamicEnvValue, error) {
 	uid, err := d.GetEnvUID(key)
 	if err != nil {
 		return nil, err
@@ -315,7 +315,7 @@ func (d *DynamicEnvManager) GetEnv(key string) (*DynamicEnvValue, error) {
 	return dynamicEnvValue, err
 }
 
-func (d *DynamicEnvManager) SetEnv(key string, value *DynamicEnvValue) error {
+func (d *DynamicEnv) SetEnv(key string, value *DynamicEnvValue) error {
 	if value == nil {
 		return errors.New("value is nil")
 	}
@@ -346,7 +346,7 @@ func (d *DynamicEnvManager) SetEnv(key string, value *DynamicEnvValue) error {
 	return d.UpdateIndex(uid, key, keyFrom)
 }
 
-func (d *DynamicEnvManager) DeleteEnv(key string) error {
+func (d *DynamicEnv) DeleteEnv(key string) error {
 	uid, err := d.GetEnvUID(key)
 	if err != nil {
 		return err
@@ -359,7 +359,7 @@ func (d *DynamicEnvManager) DeleteEnv(key string) error {
 	return d.UpdateIndex(uid, "", key)
 }
 
-func (d *DynamicEnvManager) ListEnvs() ([]string, error) {
+func (d *DynamicEnv) ListEnvs() ([]string, error) {
 	index := d.LoadIndex()
 	keys := make([]string, 0, len(*index))
 	for _, iId := range *index {
@@ -368,7 +368,7 @@ func (d *DynamicEnvManager) ListEnvs() ([]string, error) {
 	return keys, nil
 }
 
-func (d *DynamicEnvManager) ParseEnv(key string) (*DynamicEnvParsed, error) {
+func (d *DynamicEnv) ParseEnv(key string) (*DynamicEnvParsed, error) {
 	parsed, err := d.GetEnv(key)
 	if err != nil {
 		return nil, errors.New("data not found: " + key)
@@ -424,7 +424,7 @@ func resolveEnvVariables(value string, local map[string]string) string {
 	})
 }
 
-func (d *DynamicEnvManager) GetEnvs(keys []string) map[string]string {
+func (d *DynamicEnv) GetEnvs(keys []string) map[string]string {
 	envs := make(map[string]string)
 	for _, key := range keys {
 		parsed, err := d.ParseEnv(key)
@@ -441,7 +441,7 @@ func (d *DynamicEnvManager) GetEnvs(keys []string) map[string]string {
 	return envs
 }
 
-func (d *DynamicEnvManager) VerifyIdentities() error {
+func (d *DynamicEnv) VerifyIdentities() error {
 	cmd := exec.Command("age-keygen", "-y", d.Config.Identities)
 	output, err := cmd.Output()
 	if err != nil {
@@ -461,7 +461,7 @@ func (d *DynamicEnvManager) VerifyIdentities() error {
 	return errors.New("no matching identity found in recipients")
 }
 
-func (d *DynamicEnvManager) ReencryptAll() error {
+func (d *DynamicEnv) ReencryptAll() error {
 	err := d.VerifyIdentities()
 	if err != nil {
 		return err
@@ -474,7 +474,7 @@ func (d *DynamicEnvManager) ReencryptAll() error {
 	return nil
 }
 
-func (d *DynamicEnvManager) ExportTree(outDir string, prefix string) ([]string, error) {
+func (d *DynamicEnv) ExportTree(outDir string, prefix string) ([]string, error) {
 	fs := filehandler.NewFileHandler(outDir, d.Config.Debug)
 	envs := d.ListItems(prefix)
 	fmt.Println("Loaded", len(envs), "files")
@@ -501,7 +501,7 @@ func (d *DynamicEnvManager) ExportTree(outDir string, prefix string) ([]string, 
 	return keys, nil
 }
 
-func (d *DynamicEnvManager) ImportTree(inDir string, prefix string) ([]string, error) {
+func (d *DynamicEnv) ImportTree(inDir string, prefix string) ([]string, error) {
 	fs := filehandler.NewFileHandler(inDir, d.Config.Debug)
 	files, err := fs.ListFiles("", "")
 	if err != nil {
