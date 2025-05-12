@@ -27,7 +27,7 @@ func NewRootCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	cmd.AddCommand(newRecipientAddCommand(envManager))
 	cmd.AddCommand(newRecipientDelCommand(envManager))
 	cmd.AddCommand(newReindexCommand(envManager))
-	// cmd.AddCommand(newReencryptAllCommand())
+	cmd.AddCommand(newReencryptAllCommand(envManager))
 
 	return cmd
 }
@@ -211,13 +211,12 @@ func newReindexCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command
 	}
 }
 
-// func newReencryptAllCommand() *cobra.Command {
-// 	return &cobra.Command{
-// 		Use:   "reencryptAll",
-// 		Short: "Reencrypt all data",
-// 		RunE: func(cmd *cobra.Command, args []string) error {
-// 			// Implementation for reencrypting all data
-// 			return nil
-// 		},
-// 	}
-// }
+func newReencryptAllCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+	return &cobra.Command{
+		Use:   "reencryptAll",
+		Short: "Reencrypt all data",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return envManager.ReencryptAll()
+		},
+	}
+}

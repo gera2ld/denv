@@ -404,3 +404,36 @@ func (d *DynamicEnvManager) GetEnvs(keys []string) map[string]string {
 	}
 	return envs
 }
+
+func (d *DynamicEnvManager) VerifyIdentities() error {
+	cmd := exec.Command("age-keygen", "-y", d.Config.Identities)
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to verify identities: %w", err)
+	}
+
+	identities := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+	for _, identity := range identities {
+		for _, recipient := range d.UserConfig.Data.Recipients {
+			if identity == recipient {
+				return nil
+			}
+		}
+	}
+
+	return errors.New("no matching identity found in recipients")
+}
+
+func (d *DynamicEnvManager) ReencryptAll() error {
+	err := d.VerifyIdentities()
+	if err != nil {
+		return err
+	}
+
+	envs := d.ListItems()
+	for _, value := range envs {
+		d.SetEnv(value.Metadata.ID, value)
+	}
+	return nil
+}
