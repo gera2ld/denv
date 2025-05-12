@@ -29,6 +29,7 @@ func NewRootCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	cmd.AddCommand(newRecipientDelCommand(envManager))
 	cmd.AddCommand(newReindexCommand(envManager))
 	cmd.AddCommand(newReencryptAllCommand(envManager))
+	cmd.AddCommand(newCatCommand(envManager))
 
 	return cmd
 }
@@ -300,6 +301,30 @@ func newReencryptAllCommand(envManager *env_manager.DynamicEnvManager) *cobra.Co
 		Short: "Reencrypt all data",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return envManager.ReencryptAll()
+		},
+	}
+}
+
+func newCatCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+	return &cobra.Command{
+		Use:   "cat <key>",
+		Short: "Show the value of a key",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key := args[0]
+
+			parsed, err := envManager.GetEnv(key)
+			if err != nil {
+				return fmt.Errorf("failed to retrieve key: %w", err)
+			}
+
+			value, err := envManager.FormatValue(parsed, false)
+			if err != nil {
+				return fmt.Errorf("failed to format value: %w", err)
+			}
+
+			fmt.Println(value)
+			return nil
 		},
 	}
 }
