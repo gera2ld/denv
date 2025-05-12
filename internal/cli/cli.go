@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 
 	"github.com/spf13/cobra"
 )
@@ -19,10 +20,10 @@ func NewRootCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	cmd.AddCommand(newRunCommand(envManager))
 	cmd.AddCommand(newDeleteCommand(envManager))
 	// cmd.AddCommand(newImportCommand())
-	// cmd.AddCommand(newExportCommand())
+	cmd.AddCommand(newExportCommand(envManager))
 	cmd.AddCommand(newKeysCommand(envManager))
 	cmd.AddCommand(newRenameCommand(envManager))
-	// cmd.AddCommand(newEditCommand())
+	cmd.AddCommand(newEditCommand(envManager))
 	cmd.AddCommand(newRecipientsCommand(envManager))
 	cmd.AddCommand(newRecipientAddCommand(envManager))
 	cmd.AddCommand(newRecipientDelCommand(envManager))
@@ -105,16 +106,35 @@ func newDeleteCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command 
 // 	}
 // }
 
-// func newExportCommand() *cobra.Command {
-// 	return &cobra.Command{
-// 		Use:   "export",
-// 		Short: "Export all data to a directory",
-// 		RunE: func(cmd *cobra.Command, args []string) error {
-// 			// Implementation for exporting data
-// 			return nil
-// 		},
-// 	}
-// }
+func newExportCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+	var outDir string
+	var prefix string
+
+	cmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export all data to a directory",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Use the provided output directory and prefix
+			if outDir == "" {
+				outDir = "env-data" // Default output directory
+			}
+
+			keys, err := envManager.ExportTree(outDir, prefix)
+			if err != nil {
+				return fmt.Errorf("failed to export data: %w", err)
+			}
+
+			fmt.Printf("Exported %d keys to %s\n", len(keys), outDir)
+			return nil
+		},
+	}
+
+	// Add flags for the output directory and prefix
+	cmd.Flags().StringVarP(&outDir, "outDir", "o", "env-data", "Output directory")
+	cmd.Flags().StringVar(&prefix, "prefix", "", "Filter the keys by the prefix and strip it when writing to files")
+
+	return cmd
+}
 
 func newKeysCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	return &cobra.Command{
@@ -150,18 +170,81 @@ func newRenameCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command 
 	}
 }
 
-// func newEditCommand() *cobra.Command {
-// 	return &cobra.Command{
-// 		Use:   "edit <key>",
-// 		Short: "Edit the value of a key",
-// 		Args:  cobra.ExactArgs(1),
-// 		RunE: func(cmd *cobra.Command, args []string) error {
-// 			key := args[0]
-// 			// Implementation for editing a key
-// 			return nil
-// 		},
-// 	}
-// }
+func sanitizeKeyForFilename(key string) string {
+	re := regexp.MustCompile(`[^\w.-]`)
+	return re.ReplaceAllString(key, "_")
+}
+
+func newEditCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
+	return &cobra.Command{
+		Use:   "edit <key>",
+		Short: "Edit the value of a key with $EDITOR",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key := args[0]
+
+			editor := os.Getenv("EDITOR")
+			if editor == "" {
+				return errors.New("$EDITOR is not set")
+			}
+
+			parsed, err := envManager.GetEnv(key)
+			if err != nil {
+				return fmt.Errorf("failed to retrieve key: %w", err)
+			}
+
+			oldValue, err := envManager.FormatValue(parsed, false)
+			if err != nil {
+				return fmt.Errorf("failed to format value: %w", err)
+			}
+
+			safeKey := sanitizeKeyForFilename(key)
+			tempFile, err := os.CreateTemp("", fmt.Sprintf("%s.yml", safeKey))
+			if err != nil {
+				return fmt.Errorf("failed to create temporary file: %w", err)
+			}
+			defer os.Remove(tempFile.Name())
+
+			if _, err := tempFile.WriteString(oldValue); err != nil {
+				return fmt.Errorf("failed to write to temporary file: %w", err)
+			}
+			tempFile.Close()
+
+			cmdExec := exec.Command(editor, tempFile.Name())
+			cmdExec.Stdout = os.Stdout
+			cmdExec.Stderr = os.Stderr
+			cmdExec.Stdin = os.Stdin
+
+			if err := cmdExec.Run(); err != nil {
+				return fmt.Errorf("failed to open editor: %w", err)
+			}
+
+			newValueBytes, err := os.ReadFile(tempFile.Name())
+			if err != nil {
+				return fmt.Errorf("failed to read temporary file: %w", err)
+			}
+			newValue := string(newValueBytes)
+
+			if newValue == "" || newValue == oldValue {
+				fmt.Println("No changes made.")
+				return nil
+			}
+
+			parsed, err = envManager.ParseRawValue(newValue, false)
+			if err != nil {
+				return fmt.Errorf("failed to parse new value: %w", err)
+			}
+			parsed.Metadata.ID = key
+
+			if err := envManager.SetEnv(key, parsed); err != nil {
+				return fmt.Errorf("failed to save updated value: %w", err)
+			}
+
+			fmt.Println("Updated key:", key)
+			return nil
+		},
+	}
+}
 
 func newRecipientsCommand(envManager *env_manager.DynamicEnvManager) *cobra.Command {
 	return &cobra.Command{

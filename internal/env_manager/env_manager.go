@@ -29,13 +29,14 @@ import (
  * ```
  */
 
+type DynamicEnvMetadata struct {
+	ID string `yaml:"id"`
+}
 type DynamicEnvValue struct {
-	Metadata struct {
-		ID string `yaml:"id"`
-	}
-	Raw     string
-	Data    map[string]any
-	Payload string
+	Metadata DynamicEnvMetadata
+	Raw      string
+	Data     map[string]any
+	Payload  string
 }
 
 type DynamicEnvManager struct {
@@ -61,28 +62,33 @@ func (d *DynamicEnvManager) GetFilePath(path string) string {
 	return path
 }
 
-func (d *DynamicEnvManager) ParseRawValue(value string) (*DynamicEnvValue, error) {
+func (d *DynamicEnvManager) ParseRawValue(value string, includeMetadata bool) (*DynamicEnvValue, error) {
 	lines := strings.Split(value, "\n")
-	i := indexOf(lines, "---")
-	if i < 0 {
-		return nil, errors.New("invalid YAML content: missing metadata separator")
+	var metadata DynamicEnvMetadata
+
+	i := -1
+	if includeMetadata {
+		i = indexOf(lines, "---", 0)
+		if i < 0 {
+			return nil, errors.New("invalid YAML content: missing metadata separator")
+		}
+
+		rawMetadata := make(map[string]interface{})
+		if err := yaml.Unmarshal([]byte(strings.Join(lines[:i], "\n")), &rawMetadata); err != nil {
+			return nil, errors.New("invalid metadata: " + err.Error())
+		}
+
+		id, ok := rawMetadata["id"].(string)
+		if !ok || id == "" {
+			return nil, errors.New("invalid metadata: missing or invalid 'id'")
+		}
+
+		metadata.ID = id
 	}
 
-	j := indexOf(lines[i+1:], "---")
-	if j >= 0 {
-		j += i + 1
-	} else {
+	j := indexOf(lines, "---", i+1)
+	if j < 0 {
 		j = len(lines)
-	}
-
-	metadata := make(map[string]interface{})
-	if err := yaml.Unmarshal([]byte(strings.Join(lines[:i], "\n")), &metadata); err != nil {
-		return nil, errors.New("invalid metadata: " + err.Error())
-	}
-
-	id, ok := metadata["id"].(string)
-	if !ok || id == "" {
-		return nil, errors.New("invalid metadata: missing or invalid 'id'")
 	}
 
 	raw := strings.Join(lines[i+1:j], "\n")
@@ -97,18 +103,16 @@ func (d *DynamicEnvManager) ParseRawValue(value string) (*DynamicEnvValue, error
 	}
 
 	return &DynamicEnvValue{
-		Metadata: struct {
-			ID string `yaml:"id"`
-		}{ID: id},
-		Raw:     raw,
-		Data:    data,
-		Payload: payload,
+		Metadata: metadata,
+		Raw:      raw,
+		Data:     data,
+		Payload:  payload,
 	}, nil
 }
 
-func indexOf(lines []string, target string) int {
-	for i, line := range lines {
-		if line == target {
+func indexOf(lines []string, target string, offset int) int {
+	for i := offset; i < len(lines); i++ {
+		if lines[i] == target {
 			return i
 		}
 	}
@@ -176,36 +180,68 @@ func (d *DynamicEnvManager) DecryptData(data string) (string, error) {
 	return string(output), nil
 }
 
-func (d *DynamicEnvManager) ParseValue(encrypted string) (*DynamicEnvValue, error) {
+func (d *DynamicEnvManager) LoadValue(encrypted string) (*DynamicEnvValue, error) {
 	value, err := d.DecryptData(encrypted)
 	if err != nil {
 		return nil, errors.New("failed to decrypt data: " + err.Error())
 	}
-	dynamicEnvValue, err := d.ParseRawValue(value)
+	dynamicEnvValue, err := d.ParseRawValue(value, true)
 	return dynamicEnvValue, err
 }
 
-func (d *DynamicEnvManager) ListItems() map[string]*DynamicEnvValue {
-	envs := make(map[string]*DynamicEnvValue)
-	dataDir := filepath.Join(d.Config.RootDir, d.Config.DataDir)
-	files, err := os.ReadDir(dataDir)
+func (d *DynamicEnvManager) ListEnvFiles(prefix string) ([]string, error) {
+	dir := filepath.Join(d.Config.RootDir, d.Config.DataDir, prefix)
+	files, err := os.ReadDir(dir)
 	if err != nil {
+		return nil, err
+	}
+
+	var result []string
+	for _, file := range files {
+		if file.IsDir() {
+			childFiles, err := d.ListEnvFiles(filepath.Join(prefix, file.Name()))
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, childFiles...)
+		} else {
+			relpath := strings.ReplaceAll(filepath.Join(prefix, file.Name()), "\\", "/")
+			result = append(result, relpath)
+		}
+	}
+	return result, nil
+}
+
+func (d *DynamicEnvManager) ListItems(prefix string) map[string]*DynamicEnvValue {
+	envs := make(map[string]*DynamicEnvValue)
+	files, err := d.ListEnvFiles(prefix)
+	if err != nil {
+		if d.Config.Debug {
+			log.Printf("Error listing files: %v\n", err)
+		}
 		return envs
 	}
 
 	for _, file := range files {
-		if file.IsDir() || !strings.HasSuffix(file.Name(), d.Config.EnvSuffix) {
+		if !strings.HasSuffix(file, d.Config.EnvSuffix) {
 			continue
 		}
-		value, err := os.ReadFile(filepath.Join(dataDir, file.Name()))
+		path := filepath.Join(d.Config.DataDir, file)
+		value, err := d.Filehandler.ReadFile(path)
 		if err != nil {
+			if d.Config.Debug {
+				log.Printf("Error reading file %s: %v\n", path, err)
+			}
 			continue
 		}
-		dynamicEnvValue, err := d.ParseRawValue(string(value))
+		dynamicEnvValue, err := d.LoadValue(value)
 		if err != nil {
+			if d.Config.Debug {
+				log.Printf("Error parsing file %s: %v\n", path, err)
+			}
 			continue
 		}
-		uid := strings.TrimSuffix(file.Name(), d.Config.EnvSuffix)
+		uid := strings.TrimSuffix(file, d.Config.EnvSuffix)
 		envs[uid] = dynamicEnvValue
 	}
 	return envs
@@ -237,7 +273,7 @@ func (d *DynamicEnvManager) SaveIndex(index *map[string]string) error {
 }
 
 func (d *DynamicEnvManager) BuildIndex() error {
-	envs := d.ListItems()
+	envs := d.ListItems("")
 	index := make(map[string]string)
 	for uid, value := range envs {
 		index[uid] = value.Metadata.ID
@@ -285,7 +321,7 @@ func (d *DynamicEnvManager) GetEnv(key string) (*DynamicEnvValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	dynamicEnvValue, err := d.ParseValue(data)
+	dynamicEnvValue, err := d.LoadValue(data)
 	return dynamicEnvValue, err
 }
 
@@ -431,9 +467,36 @@ func (d *DynamicEnvManager) ReencryptAll() error {
 		return err
 	}
 
-	envs := d.ListItems()
+	envs := d.ListItems("")
 	for _, value := range envs {
 		d.SetEnv(value.Metadata.ID, value)
 	}
 	return nil
+}
+
+func (d *DynamicEnvManager) ExportTree(outDir string, prefix string) ([]string, error) {
+	fs := filehandler.NewFileHandler(outDir, d.Config.Debug)
+	envs := d.ListItems(prefix)
+	fmt.Println("Loaded", len(envs), "files")
+	keys := make([]string, len(envs))
+	for _, value := range envs {
+		key := value.Metadata.ID
+		keys = append(keys, key)
+		path, err := filepath.Rel(prefix, key)
+		path = strings.ReplaceAll(path, "\\", "/")
+		if err != nil || strings.HasPrefix(path, "..") {
+			return nil, fmt.Errorf("failed to get relative path: %w", err)
+		}
+
+		output, err := d.FormatValue(value, false)
+		if err != nil {
+			return nil, fmt.Errorf("failed to format value: %w", err)
+		}
+
+		err = fs.WriteFile(path, output)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write file: %w", err)
+		}
+	}
+	return keys, nil
 }
