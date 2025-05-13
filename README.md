@@ -23,6 +23,8 @@ You can run commands using the following syntax:
 
 ```bash
 ./denv run -e key1 -e key2 -- command arg1 arg2
+# or
+DENV_KEYS=key1,key2 ./denv run -- command arg1 arg2
 ```
 
 ### Show Environment Variables

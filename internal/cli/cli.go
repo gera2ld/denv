@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -46,6 +47,14 @@ func newRunCommand(envManager *env.DynamicEnv) *cobra.Command {
 You can also export the environment variables to stdout using the --export flag.`,
 		Args: cobra.ArbitraryArgs, // Accepts any arguments after the command
 		RunE: func(cmd *cobra.Command, args []string) error {
+			osEnvKeys := strings.Split(os.Getenv("DENV_KEYS"), ",")
+			for _, key := range osEnvKeys {
+				key = strings.TrimSpace(key)
+				if key != "" {
+					envKeys = append(envKeys, key)
+				}
+			}
+
 			envVars := envManager.GetEnvs(envKeys)
 
 			if export {
