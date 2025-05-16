@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-type Item struct {
+type BuildAsset struct {
 	Name        string
 	Time        string
 	DisplayTime string
@@ -17,10 +17,12 @@ type Item struct {
 
 type BuildResult struct {
 	Commit string
-	Items  []Item
+	Assets  []BuildAsset
 }
 
 const binDir = "bin"
+const exeName = "denv"
+const mainEntry = "./cmd/denv"
 
 var args = [][]string{
 	{"darwin", "amd64"},
@@ -40,17 +42,46 @@ func getCommit() string {
 	return strings.TrimSpace(result)
 }
 
-func getItem(name string) Item {
+func getItem(name string) BuildAsset {
 	fileInfo, err := os.Stat(binDir + "/" + name)
 	if err != nil {
 		log.Fatalf("Error reading file: %s\n", binDir+"/"+name)
 	}
-	return Item{
+	return BuildAsset{
 		Name:        name,
 		Time:        fileInfo.ModTime().Format(time.RFC3339),
 		DisplayTime: fileInfo.ModTime().Format(time.RFC1123),
 		Size:        fileInfo.Size(),
 	}
+}
+
+func buildItem(buildOs, buildArch, commit string) BuildAsset {
+	suffix := ""
+	if buildOs == "windows" {
+		suffix = ".exe"
+	}
+	now := time.Now().Format(time.RFC3339)
+	log.Printf("Build os=%s, arch=%s\n", buildOs, buildArch)
+	name := exeName + "-" + buildOs + "-" + buildArch + suffix
+	cmd := exec.Command(
+		"go",
+		"build",
+		"-ldflags",
+		"-s -w -X main.version="+commit+" -X main.builtAt="+now,
+		"-trimpath",
+		"-o",
+		"bin/"+name,
+		mainEntry,
+	)
+	env := os.Environ()
+	cmd.Env = append(env, "CGO_ENABLED=0", "GOOS="+buildOs, "GOARCH="+buildArch)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	err := cmd.Run()
+	if err != nil {
+		log.Fatalf("Failed building os=%s, arch=%s\n", buildOs, buildArch)
+	}
+	return getItem(name)
 }
 
 func build() BuildResult {
@@ -62,32 +93,8 @@ func build() BuildResult {
 	for _, item := range args {
 		buildOs := item[0]
 		buildArch := item[1]
-		suffix := ""
-		if buildOs == "windows" {
-			suffix = ".exe"
-		}
-		now := time.Now().Format(time.RFC3339)
-		log.Printf("Build os=%s, arch=%s\n", buildOs, buildArch)
-		name := "denv-" + buildOs + "-" + buildArch + suffix
-		cmd := exec.Command(
-			"go",
-			"build",
-			"-ldflags",
-			"-s -w -X main.version="+commit+" -X main.builtAt="+now,
-			"-trimpath",
-			"-o",
-			"bin/"+name,
-			"./cmd/denv",
-		)
-		env := os.Environ()
-		cmd.Env = append(env, "CGO_ENABLED=0", "GOOS="+buildOs, "GOARCH="+buildArch)
-		cmd.Stderr = os.Stderr
-		cmd.Stdout = os.Stdout
-		err := cmd.Run()
-		if err != nil {
-			log.Fatalf("Failed building os=%s, arch=%s\n", buildOs, buildArch)
-		}
-		result.Items = append(result.Items, getItem(name))
+		item := buildItem(buildOs, buildArch, commit)
+		result.Assets = append(result.Assets, item)
 	}
 	return result
 }
