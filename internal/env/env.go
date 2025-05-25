@@ -73,7 +73,7 @@ func (d *DynamicEnv) ParseRawValue(value string, includeMetadata bool) (*Dynamic
 			return nil, errors.New("invalid YAML content: missing metadata separator")
 		}
 
-		rawMetadata := make(map[string]interface{})
+		rawMetadata := make(map[string]any)
 		if err := yaml.Unmarshal([]byte(strings.Join(lines[:i], "\n")), &rawMetadata); err != nil {
 			return nil, errors.New("invalid metadata: " + err.Error())
 		}
@@ -92,7 +92,7 @@ func (d *DynamicEnv) ParseRawValue(value string, includeMetadata bool) (*Dynamic
 	}
 
 	raw := strings.Join(lines[i+1:j], "\n")
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 	if err := yaml.Unmarshal([]byte(raw), &data); err != nil {
 		return nil, errors.New("invalid data: " + err.Error())
 	}
@@ -273,7 +273,11 @@ func (d *DynamicEnv) BuildIndex() error {
 
 func (d *DynamicEnv) UpdateIndex(uid string, id string, idFrom string) error {
 	index := d.LoadIndex()
-	(*index)[uid] = id
+	if id == "" {
+		delete(*index, id)
+	} else {
+		(*index)[uid] = id
+	}
 	return d.SaveIndex(d.index)
 }
 
@@ -320,13 +324,13 @@ func (d *DynamicEnv) SetEnv(key string, value *DynamicEnvValue) error {
 		return errors.New("value is nil")
 	}
 
-	uid, err := d.GetEnvUID(key)
+	keyFrom := value.Metadata.ID
+	value.Metadata.ID = key
+
+	uid, err := d.GetEnvUID(keyFrom)
 	if err != nil {
 		return err
 	}
-
-	keyFrom := value.Metadata.ID
-	value.Metadata.ID = key
 
 	data, err := d.FormatValue(value, true)
 	if err != nil {
@@ -376,7 +380,7 @@ func (d *DynamicEnv) ParseEnv(key string) (*DynamicEnvParsed, error) {
 
 	result := DynamicEnvParsed{Local: make(map[string]string), Env: make(map[string]string)}
 
-	if extends, ok := parsed.Data["extends"].([]interface{}); ok {
+	if extends, ok := parsed.Data["extends"].([]any); ok {
 		for _, dep := range extends {
 			depKey, ok := dep.(string)
 			if !ok {
@@ -395,13 +399,13 @@ func (d *DynamicEnv) ParseEnv(key string) (*DynamicEnvParsed, error) {
 		}
 	}
 
-	if local, ok := parsed.Data["local"].(map[string]interface{}); ok {
+	if local, ok := parsed.Data["local"].(map[string]any); ok {
 		for k, v := range local {
 			result.Local[k] = fmt.Sprintf("%v", v)
 		}
 	}
 
-	if env, ok := parsed.Data["env"].(map[string]interface{}); ok {
+	if env, ok := parsed.Data["env"].(map[string]any); ok {
 		for k, v := range env {
 			value := fmt.Sprintf("%v", v)
 			resolved := resolveEnvVariables(value, result.Local)
