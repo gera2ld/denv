@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -162,6 +163,7 @@ func newKeysCommand(envManager *env.DynamicEnv) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			sort.Strings(keys)
 			for _, key := range keys {
 				fmt.Println(key)
 			}
