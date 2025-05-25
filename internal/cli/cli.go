@@ -217,7 +217,7 @@ func newEditCommand(envManager *env.DynamicEnv) *cobra.Command {
 			}
 
 			safeKey := sanitizeKeyForFilename(key)
-			tempFile, err := os.CreateTemp("", fmt.Sprintf("%s.yml", safeKey))
+			tempFile, err := os.CreateTemp("", fmt.Sprintf("%s-*.yml", safeKey))
 			if err != nil {
 				return fmt.Errorf("failed to create temporary file: %w", err)
 			}
