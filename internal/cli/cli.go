@@ -207,10 +207,15 @@ func newEditCommand(envManager *env.DynamicEnv) *cobra.Command {
 				return errors.New("$EDITOR is not set")
 			}
 
-			parsed, _ := envManager.GetEnv(key)
+			parsed, err := envManager.GetEnv(key)
+			if err != nil {
+				fmt.Println("Editing new env")
+			}
 
+			var metadata env.DynamicEnvMetadata
 			oldValue := ""
 			if parsed != nil {
+				metadata = parsed.Metadata
 				value, err := envManager.FormatValue(parsed, false)
 				if err != nil {
 					return fmt.Errorf("failed to format value: %w", err)
@@ -254,6 +259,7 @@ func newEditCommand(envManager *env.DynamicEnv) *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("failed to parse new value: %w", err)
 			}
+			parsed.Metadata = metadata
 
 			if err := envManager.SetEnv(key, parsed); err != nil {
 				return fmt.Errorf("failed to save updated value: %w", err)
