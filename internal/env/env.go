@@ -274,7 +274,7 @@ func (d *DynamicEnv) BuildIndex() error {
 func (d *DynamicEnv) UpdateIndex(uid string, id string, idFrom string) error {
 	index := d.LoadIndex()
 	if id == "" {
-		delete(*index, id)
+		delete(*index, uid)
 	} else {
 		(*index)[uid] = id
 	}
